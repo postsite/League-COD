@@ -376,7 +376,6 @@ footer {
         <h2 style="color:#FFD700;">S'inscrire au tournoi</h2>
         <p>Pour vous inscrire, veuillez payer 25€.<br>20€ pour la saison, 5€ pour le gagnant.</p>
         <input type="text" id="pseudoInput" placeholder="Votre pseudo" oninput="togglePaymentButton()">
-        <!-- BOUTON "PASSER AU PAIEMENT" AJOUTÉ (n'affecte pas le reste) -->
         <button id="nextToPayment" onclick="showPaypalButton()" style="display:none; background-color:#FFD700; color:#000; border:none; padding:10px 15px; border-radius:5px; cursor:pointer; font-weight:bold; margin-top:8px;">Passer au paiement 💳</button>
         <div id="paypal-button-container" style="margin-top:15px; display:none;"></div>
         <div style="margin-top:15px;">
@@ -424,11 +423,9 @@ function checkAdminCode(){
     }
 }
 
-/* -------------------- ÉDITEUR: TAILLES ET FORMAT -------------------- */
+/* -------------------- ÉDITEUR -------------------- */
 const SIZE_ORDER = ['petit','moyen','grand'];
 const SIZE_PX = { petit: '16px', moyen: '20px', grand: '24px' };
-
-/* Trouve l'attribut data-size le plus proche dans l'arbre */
 function getClosestSizeFromNode(node){
     while(node && node.nodeType === 1){
         if(node.hasAttribute && node.hasAttribute('data-size')){
@@ -439,8 +436,6 @@ function getClosestSizeFromNode(node){
     }
     return 'moyen';
 }
-
-/* Applique une taille (increase/decrease) sur la sélection */
 function applySizeToSelection(direction){
     if (!adminMode) return;
     const sel = window.getSelection();
@@ -452,24 +447,19 @@ function applySizeToSelection(direction){
     if (idx === -1) idx = 1;
     if (direction === 'increase' && idx < SIZE_ORDER.length - 1) idx++;
     if (direction === 'decrease' && idx > 0) idx--;
-    // Wrap selection in span with data-size and inline font-size
     const wrapper = document.createElement('span');
     wrapper.setAttribute('data-size', SIZE_ORDER[idx]);
     wrapper.style.fontSize = SIZE_PX[SIZE_ORDER[idx]];
     wrapper.appendChild(range.cloneContents());
     range.deleteContents();
     range.insertNode(wrapper);
-    // normalize selection to after inserted node
     sel.removeAllRanges();
     const newRange = document.createRange();
     newRange.setStartAfter(wrapper);
     newRange.collapse(true);
     sel.addRange(newRange);
 }
-
-/* Format text command (bold/italic/underline/size) */
 function formatText(command, event, btn){
-    // Ensure event exists (for inline handlers)
     event = event || window.event;
     if(event && event.preventDefault) { event.preventDefault(); }
     if(event && event.stopPropagation) { event.stopPropagation(); }
@@ -477,17 +467,11 @@ function formatText(command, event, btn){
     const content = btn.closest('.editable').querySelector('.editable-content');
     if (!content) return;
     content.focus();
-    if (command === 'bold') {
-        document.execCommand('bold', false, null);
-    } else if (command === 'italic') {
-        document.execCommand('italic', false, null);
-    } else if (command === 'underline') {
-        document.execCommand('underline', false, null);
-    } else if (command === 'increaseFont') {
-        applySizeToSelection('increase');
-    } else if (command === 'decreaseFont') {
-        applySizeToSelection('decrease');
-    }
+    if (command === 'bold') document.execCommand('bold', false, null);
+    else if (command === 'italic') document.execCommand('italic', false, null);
+    else if (command === 'underline') document.execCommand('underline', false, null);
+    else if (command === 'increaseFont') applySizeToSelection('increase');
+    else if (command === 'decreaseFont') applySizeToSelection('decrease');
     saveContent(content);
 }
 
@@ -515,28 +499,39 @@ function enableEditing(){
         }
     });
 
-    // Prevent toolbar buttons from stealing focus when clicked
     document.querySelectorAll('.editor-toolbar button').forEach(btn => {
         btn.addEventListener('mousedown', e => e.preventDefault());
     });
 }
 
-/* -------------------- SAUVEGARDE LOCALE -------------------- */
-function saveContent(el){
-    try { localStorage.setItem(el.parentElement.id, el.innerHTML); } catch(e) {}
+/* -------------------- SAUVEGARDE EN LIGNE VIA API -------------------- */
+async function saveContent(el){
+    if (!adminMode) return;
+    const contentId = el.parentElement.id;
+    const contentHTML = el.innerHTML;
+    try {
+        await fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json' },
+            body: JSON.stringify({ id: contentId, content: contentHTML })
+        });
+    } catch(err) { console.error('Erreur sauvegarde en ligne:', err); }
 }
 
-/* Charger le contenu sauvegardé au démarrage */
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.editable').forEach(el => {
+/* -------------------- CHARGEMENT DU CONTENU DEPUIS L'API -------------------- */
+document.addEventListener('DOMContentLoaded', async () => {
+    document.querySelectorAll('.editable').forEach(async el => {
         const content = el.querySelector('.editable-content');
         if (!content) return;
-        const saved = localStorage.getItem(el.id);
-        if (saved) content.innerHTML = saved;
+        try {
+            const res = await fetch(`/api/load?id=${el.id}`);
+            if (!res.ok) throw new Error('Erreur serveur');
+            const data = await res.json();
+            if (data.content) content.innerHTML = data.content;
+        } catch(err){ console.error('Erreur chargement en ligne:', err); }
         const toolbar = el.querySelector('.editor-toolbar');
         if (toolbar) toolbar.style.display = 'none';
     });
-    // attach mousedown preventDefault to toolbar buttons in case they exist before admin enable
     document.querySelectorAll('.editor-toolbar button').forEach(btn => {
         btn.addEventListener('mousedown', e => e.preventDefault());
     });
@@ -550,53 +545,33 @@ function openInscrireModal(){
     document.getElementById('nextToPayment').style.display = 'none';
 }
 function closeInscrireModal(){ document.getElementById('inscrireModal').style.display = 'none'; }
-
-/* Affiche le bouton "Passer au paiement" après saisie du pseudo */
 function togglePaymentButton(){
     const pseudo = document.getElementById('pseudoInput').value.trim();
     const btn = document.getElementById('nextToPayment');
     if(btn) btn.style.display = pseudo ? 'inline-block' : 'none';
 }
-
-/* Affiche et initialise le bouton PayPal uniquement après clic sur "Passer au paiement" */
 function showPaypalButton(){
     const pseudoInput = document.getElementById('pseudoInput');
     const pseudo = pseudoInput ? pseudoInput.value.trim() : '';
     const container = document.getElementById('paypal-button-container');
 
-    if (!pseudo) {
-        alert("Veuillez entrer votre pseudo avant de passer au paiement.");
-        return;
-    }
-
-    // Si déjà rendu, juste afficher
-    if (container && container.innerHTML.trim() !== '') {
-        container.style.display = 'block';
-        return;
-    }
-
+    if (!pseudo) { alert("Veuillez entrer votre pseudo."); return; }
+    if (container && container.innerHTML.trim() !== '') { container.style.display = 'block'; return; }
     if (container) container.style.display = 'block';
 
-    // Render PayPal buttons (25€)
     paypal.Buttons({
         style: { label: 'pay' },
         createOrder: function(data, actions){
-            return actions.order.create({
-                purchase_units: [{
-                    amount: { value: '25.00' }
-                }]
-            });
+            return actions.order.create({ purchase_units: [{ amount: { value: '25.00' } }] });
         },
         onApprove: function(data, actions){
             return actions.order.capture().then(function(details){
-                const finalPseudo = (document.getElementById('pseudoInput') && document.getElementById('pseudoInput').value.trim()) || pseudo;
+                const finalPseudo = (document.getElementById('pseudoInput')?.value.trim()) || pseudo;
                 alert(finalPseudo + " est bien inscrit au tournoi !");
                 closeInscrireModal();
             });
         },
-        onError: function(err){
-            alert("Erreur lors du paiement. Veuillez réessayer.");
-        }
+        onError: function(err){ alert("Erreur lors du paiement. Veuillez réessayer."); }
     }).render('#paypal-button-container');
 }
 </script>
