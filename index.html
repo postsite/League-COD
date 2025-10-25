@@ -504,18 +504,27 @@ function enableEditing(){
     });
 }
 
-/* -------------------- SAUVEGARDE EN LIGNE VIA API -------------------- */
+/* -------------------- SAUVEGARDE EN LIGNE VIA NETLIFY FUNCTION -------------------- */
 async function saveContent(el){
     if (!adminMode) return;
+
     const contentId = el.parentElement.id;
     const contentHTML = el.innerHTML;
+
     try {
-        await fetch('/api/save', {
+        const res = await fetch('/.netlify/functions/saveContent', {
             method: 'POST',
-            headers: { 'Content-Type':'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: contentId, content: contentHTML })
         });
-    } catch(err) { console.error('Erreur sauvegarde en ligne:', err); }
+
+        if (!res.ok) throw new Error('Erreur lors de la sauvegarde');
+
+        showAdminAlert('✅ Contenu sauvegardé en ligne !');
+    } catch(e) {
+        showAdminAlert('❌ Impossible de sauvegarder le contenu', 'error');
+        console.error(e);
+    }
 }
 
 /* -------------------- CHARGEMENT DU CONTENU DEPUIS L'API -------------------- */
