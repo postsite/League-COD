@@ -504,26 +504,20 @@ function enableEditing(){
     });
 }
 
-/* -------------------- SAUVEGARDE EN LIGNE VIA NETLIFY FUNCTION -------------------- */
 async function saveContent(el){
     if (!adminMode) return;
-
     const contentId = el.parentElement.id;
     const contentHTML = el.innerHTML;
-
     try {
-        const res = await fetch('/.saveContent.js', {
+        const res = await fetch('/.netlify/functions/saveContent', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type':'application/json' },
             body: JSON.stringify({ id: contentId, content: contentHTML })
         });
-
-        if (!res.ok) throw new Error('Erreur lors de la sauvegarde');
-
-        showAdminAlert('✅ Contenu sauvegardé en ligne !');
-    } catch(e) {
+        if (!res.ok) throw new Error('Impossible de sauvegarder le contenu');
+    } catch(err) { 
+        console.error('Erreur sauvegarde en ligne:', err);
         showAdminAlert('❌ Impossible de sauvegarder le contenu', 'error');
-        console.error(e);
     }
 }
 
