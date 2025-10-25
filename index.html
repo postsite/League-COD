@@ -509,7 +509,7 @@ async function saveContent(el){
     const contentId = el.parentElement.id;
     const contentHTML = el.innerHTML;
     try {
-        const res = await fetch('/.netlify/functions/saveContent', {
+        const res = await fetch('/.netlify/functions/save', {
             method: 'POST',
             headers: { 'Content-Type':'application/json' },
             body: JSON.stringify({ id: contentId, content: contentHTML })
